@@ -6,7 +6,8 @@ import { resolveAccount, inspectAccount } from "./config.js";
 import { buildSendText } from "./outbound.js";
 import { getAgentLinkBus } from "./bus.js";
 import { dispatchAgentLinkInbound } from "./runtime-bridge.js";
-import { setLiveCfg } from "./runtime-state.js";
+import { setLiveCfg, getLiveCfg } from "./runtime-state.js";
+import { createAgentLinkSendTool } from "./tools.js";
 import type { ResolvedAgentLinkAccount } from "./types.js";
 
 const CHANNEL_ID = "agent-link";
@@ -45,6 +46,9 @@ const channelBase = createChannelPluginBase<ResolvedAgentLinkAccount>({
 export const agentLinkPlugin = createChatChannelPlugin<ResolvedAgentLinkAccount>({
   base: {
     ...(channelBase as Record<string, unknown>),
+    agentTools: ({ cfg }: { cfg?: unknown }) => [
+      createAgentLinkSendTool(() => cfg ?? getLiveCfg()),
+    ],
     gateway: {
       startAccount: async (ctx: {
         cfg: unknown;

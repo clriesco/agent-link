@@ -22,7 +22,9 @@
     "typecheck": "tsc --noEmit"
   },
   "openclaw": {
-    "extensions": ["./index.ts"],
+    "extensions": [
+      "./index.ts"
+    ],
     "setupEntry": "./setup-entry.ts",
     "channel": {
       "id": "agent-link",
@@ -42,5 +44,8 @@
   "devDependencies": {
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "typebox": "1.1.34"
   }
 }
