@@ -1,0 +1,44 @@
+{
+  "id": "agent-link",
+  "kind": "channel",
+  "channels": ["agent-link"],
+  "name": "Agent Link",
+  "description": "Canal de comunicación directa entre agentes del sistema.",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  },
+  "channelConfigs": {
+    "agent-link": {
+      "schema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pairs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["from", "to"],
+              "properties": {
+                "from": { "type": "string", "minLength": 1 },
+                "to": { "type": "string", "minLength": 1 }
+              }
+            }
+          },
+          "dmSecurity": {
+            "type": "string",
+            "enum": ["allowlist", "deny", "open"]
+          }
+        }
+      },
+      "uiHints": {
+        "pairs": {
+          "label": "Pares de agentes autorizados",
+          "description": "Lista de pares { from, to } que pueden mensajearse vía agent-link."
+        }
+      }
+    }
+  }
+}

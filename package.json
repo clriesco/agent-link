@@ -1,0 +1,46 @@
+{
+  "name": "agent-link",
+  "version": "0.1.0",
+  "description": "Trusted in-process inter-agent communication channel for OpenClaw.",
+  "type": "module",
+  "author": "Charly López <clriesco@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/clriesco/agent-link.git"
+  },
+  "homepage": "https://github.com/clriesco/agent-link#readme",
+  "bugs": {
+    "url": "https://github.com/clriesco/agent-link/issues"
+  },
+  "private": true,
+  "packageManager": "pnpm@10.33.2",
+  "main": "index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "openclaw": {
+    "extensions": ["./index.ts"],
+    "setupEntry": "./setup-entry.ts",
+    "channel": {
+      "id": "agent-link",
+      "label": "Agent Link",
+      "selectionLabel": "Agent Link (inter-agent direct)",
+      "detailLabel": "Agent Link",
+      "docsPath": "/channels/agent-link",
+      "docsLabel": "agent-link",
+      "blurb": "Canal directo entre agentes del sistema, sin humano y sin proveedor externo.",
+      "markdownCapable": true,
+      "systemImage": "person.2.wave.2"
+    }
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}
