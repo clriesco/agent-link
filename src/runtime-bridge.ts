@@ -76,9 +76,7 @@ export async function dispatchAgentLinkInbound(
   params: DispatchInboundParams,
 ): Promise<void> {
   const { event, cfg, bus, log } = params;
-  log?.("info", `dispatch start (to=${event.to} msgId=${event.messageId})`);
   const { conv, reply, store, pipeline } = await loadRuntimes();
-  log?.("info", `runtimes loaded (to=${event.to})`);
 
   const agentId = event.to;
   const peerId = event.from;
@@ -87,7 +85,6 @@ export async function dispatchAgentLinkInbound(
   const sessionStoreCfg = (cfg as { session?: { store?: unknown } }).session
     ?.store;
   const storePath = store.resolveStorePath(sessionStoreCfg, { agentId });
-  log?.("info", `storePath=${storePath}`);
 
   const ctxPayload = reply.finalizeInboundContext({
     Body: event.text,
@@ -124,7 +121,6 @@ export async function dispatchAgentLinkInbound(
     unknown
   > & { onModelSelected?: unknown };
 
-  log?.("info", `calling runInboundReplyTurn (sessionKey=${sessionKey})`);
   try {
     await runInboundReplyTurn({
       channel: "agent-link",
@@ -169,7 +165,6 @@ export async function dispatchAgentLinkInbound(
         }),
       } as never,
     });
-    log?.("info", `runInboundReplyTurn returned (to=${agentId})`);
   } catch (err) {
     log?.("error", `agent-link: dispatch failed (to=${agentId})`, err);
     throw err;

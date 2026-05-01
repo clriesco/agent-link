@@ -64,7 +64,6 @@ export const agentLinkPlugin = createChatChannelPlugin<ResolvedAgentLinkAccount>
         };
 
         const unsubscribe = bus.subscribe(ctx.accountId, async (event) => {
-          log("info", `agent-link: listener fired (to=${event.to} from=${event.from} msgId=${event.messageId})`);
           if (ctx.abortSignal.aborted) return;
           try {
             await dispatchAgentLinkInbound({
@@ -78,7 +77,7 @@ export const agentLinkPlugin = createChatChannelPlugin<ResolvedAgentLinkAccount>
           }
         });
 
-        log("info", `agent-link: subscribed (accountId=${ctx.accountId}) listenerCount=${bus.listenerCount(ctx.accountId)}`);
+        log("info", `agent-link: subscribed (accountId=${ctx.accountId})`);
 
         await new Promise<void>((resolve) => {
           if (ctx.abortSignal.aborted) {

@@ -12,11 +12,9 @@ export default defineChannelPluginEntry({
   registerFull(api) {
     const bus = getAgentLinkBus();
 
-    api.logger?.info?.("agent-link: registering gateway method agentlink.send");
     api.registerGatewayMethod?.(
       "agentlink.send",
       async (opts) => {
-        api.logger?.info?.("agent-link: agentlink.send invoked");
         const o = opts as unknown as {
           params: Record<string, unknown>;
           respond: (
@@ -51,9 +49,6 @@ export default defineChannelPluginEntry({
             }
           }
           const event = bus.send({ from, to, text, replyToId });
-          api.logger?.info?.(
-            `agent-link: bus.send done msgId=${event.messageId} listenerCount=${bus.listenerCount(to)}`,
-          );
           o.respond(true, { messageId: event.messageId });
         } catch (err) {
           o.respond(false, undefined, {
