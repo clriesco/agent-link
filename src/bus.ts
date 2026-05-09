@@ -28,6 +28,22 @@ function generateMessageId(): string {
   return `al-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * Coerce a `text` payload to a string regardless of what the caller passed.
+ * Strings pass through. Objects/arrays/numbers/booleans get JSON-serialised.
+ * Null/undefined become "". This prevents the receiver from seeing
+ * "[object Object]" when a caller forgot to stringify before sending.
+ */
+function coerceToString(value: unknown): string {
+  if (typeof value === "string") return value;
+  if (value === null || value === undefined) return "";
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
 export interface AgentLinkBusOptions {
   maxCacheEntries?: number;
   cacheTtlMs?: number;
@@ -57,7 +73,7 @@ export class AgentLinkBus {
     const event: AgentLinkInboundEvent = {
       from: params.from,
       to: params.to,
-      text: params.text,
+      text: coerceToString(params.text),
       replyToId: params.replyToId,
       messageId: generateMessageId(),
       timestampMs: Date.now(),

@@ -64,4 +64,40 @@ describe("AgentLinkBus", () => {
     const b = bus.send({ from: "roy", to: "evacastro", text: "b" });
     expect(a.messageId).not.toBe(b.messageId);
   });
+
+  it("coerces non-string text payloads to JSON strings", async () => {
+    const bus = new AgentLinkBus();
+    const inbox: string[] = [];
+    bus.subscribe("evacastro", (e) => {
+      inbox.push(e.text);
+    });
+    bus.send({
+      from: "roy",
+      to: "evacastro",
+      // Caller passed an object instead of a stringified payload.
+      text: { tipo: "ping", n: 7 } as unknown as string,
+    });
+    bus.send({
+      from: "roy",
+      to: "evacastro",
+      text: ["a", "b"] as unknown as string,
+    });
+    bus.send({
+      from: "roy",
+      to: "evacastro",
+      text: 42 as unknown as string,
+    });
+    bus.send({
+      from: "roy",
+      to: "evacastro",
+      text: null as unknown as string,
+    });
+    await Promise.resolve();
+    expect(inbox).toEqual([
+      '{"tipo":"ping","n":7}',
+      '["a","b"]',
+      "42",
+      "",
+    ]);
+  });
 });
