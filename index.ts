@@ -2,6 +2,7 @@ import { defineChannelPluginEntry } from "openclaw/plugin-sdk/channel-core";
 import { agentLinkPlugin } from "./src/channel.js";
 import { getAgentLinkBus } from "./src/bus.js";
 import { resolveAccount } from "./src/config.js";
+import { persistOutboundToSenderTranscript } from "./src/runtime-bridge.js";
 import { getLiveCfg } from "./src/runtime-state.js";
 
 export default defineChannelPluginEntry({
@@ -50,6 +51,19 @@ export default defineChannelPluginEntry({
           }
           const event = bus.send({ from, to, text, replyToId });
           o.respond(true, { messageId: event.messageId });
+
+          // Best-effort: persist sender's outbound to its own session
+          // transcript so it isn't blind to its own message when later
+          // activated by the reply. Fire-and-forget; errors are swallowed
+          // inside the helper. Only effective once openclaw exposes
+          // `openclaw/plugin-sdk/transcript.runtime` (no-op until then).
+          void persistOutboundToSenderTranscript({
+            cfg: cfg ?? null,
+            from,
+            to,
+            text,
+            messageId: event.messageId,
+          });
         } catch (err) {
           o.respond(false, undefined, {
             code: "internal",

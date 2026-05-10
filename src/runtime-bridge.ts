@@ -26,10 +26,22 @@ interface ChannelReplyPipelineRuntime {
   }) => Record<string, unknown> & { onModelSelected?: unknown };
 }
 
+interface TranscriptRuntime {
+  appendAssistantMessageToSessionTranscript: (input: {
+    agentId?: string;
+    sessionKey: string;
+    text?: string;
+    idempotencyKey?: string;
+    storePath?: string;
+  }) => Promise<unknown>;
+}
+
 let conversationRuntime: ConversationRuntime | null = null;
 let replyDispatchRuntime: ReplyDispatchRuntime | null = null;
 let sessionStoreRuntime: SessionStoreRuntime | null = null;
 let replyPipelineRuntime: ChannelReplyPipelineRuntime | null = null;
+/** `null` after a failed import — we don't retry per call. `undefined` = not tried yet. */
+let transcriptRuntime: TranscriptRuntime | null | undefined = undefined;
 
 async function loadRuntimes(): Promise<{
   conv: ConversationRuntime;
@@ -194,7 +206,7 @@ function buildBodyForAgent(
     const original = bus.getCachedMessage(event.replyToId);
     if (original) {
       const elapsed = formatElapsed(event.timestampMs - original.timestampMs);
-      const truncated = truncate(original.text, 200);
+      const truncated = truncate(original.text, 2000);
       const quoted = truncated
         .split("\n")
         .map((line) => `> ${line}`)
@@ -223,4 +235,64 @@ function formatElapsed(ms: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return seconds ? `${minutes}m${seconds}s` : `${minutes}m`;
+}
+
+async function loadTranscriptRuntime(): Promise<TranscriptRuntime | null> {
+  if (transcriptRuntime !== undefined) return transcriptRuntime;
+  try {
+    // Indirect string so TS doesn't resolve the import at compile time —
+    // older openclaw builds don't yet expose this subpath, and the plugin
+    // must keep working there (degrading to the cache-based ↪ block).
+    const modulePath = "openclaw/plugin-sdk/transcript.runtime";
+    const mod = (await import(modulePath)) as Partial<TranscriptRuntime>;
+    if (typeof mod.appendAssistantMessageToSessionTranscript === "function") {
+      transcriptRuntime = mod as TranscriptRuntime;
+    } else {
+      transcriptRuntime = null;
+    }
+  } catch {
+    transcriptRuntime = null;
+  }
+  return transcriptRuntime;
+}
+
+/**
+ * Best-effort write of an outbound agent-link message to the sender's own
+ * session transcript. The intent is that when the sender is later activated
+ * to handle the recipient's reply (in a different session than where the
+ * send was issued), its transcript already contains the prior assistant
+ * turn — instead of relying solely on the `↪ Tu envío anterior` block,
+ * which depends on the in-memory bus cache.
+ *
+ * Falls back silently when the running openclaw build does not expose the
+ * public transcript runtime export. Errors do not propagate; the caller
+ * should treat this as fire-and-forget.
+ */
+export async function persistOutboundToSenderTranscript(params: {
+  cfg: unknown;
+  from: string;
+  to: string;
+  text: string;
+  messageId: string;
+  log?: (level: "info" | "warn" | "error", msg: string, meta?: unknown) => void;
+}): Promise<void> {
+  const { cfg, from, to, text, messageId, log } = params;
+  try {
+    const transcript = await loadTranscriptRuntime();
+    if (!transcript) return;
+    const { store } = await loadRuntimes();
+    const sessionStoreCfg = (cfg as { session?: { store?: unknown } } | null)
+      ?.session?.store;
+    const storePath = store.resolveStorePath(sessionStoreCfg, { agentId: from });
+    const sessionKey = buildAgentLinkSessionKey(from, to);
+    await transcript.appendAssistantMessageToSessionTranscript({
+      agentId: from,
+      sessionKey,
+      text,
+      idempotencyKey: messageId,
+      storePath,
+    });
+  } catch (err) {
+    log?.("warn", "agent-link: outbound transcript persist skipped", err);
+  }
 }

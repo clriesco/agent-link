@@ -1,4 +1,8 @@
 import { EventEmitter } from "node:events";
+import { existsSync, readFileSync } from "node:fs";
+import { mkdir, rename, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import type {
   AgentId,
   AgentLinkInboundEvent,
@@ -17,8 +21,15 @@ export interface CachedAgentLinkMessage {
   timestampMs: number;
 }
 
-const DEFAULT_MAX_CACHE_ENTRIES = 200;
-const DEFAULT_CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
+const DEFAULT_MAX_CACHE_ENTRIES = 1000;
+const DEFAULT_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 h
+const DEFAULT_CACHE_FILE_PATH = join(
+  homedir(),
+  ".openclaw",
+  "state",
+  "agent-link",
+  "cache.json",
+);
 
 function inboundEventName(agentId: AgentId): string {
   return `inbound:${agentId}`;
@@ -47,6 +58,18 @@ function coerceToString(value: unknown): string {
 export interface AgentLinkBusOptions {
   maxCacheEntries?: number;
   cacheTtlMs?: number;
+  /**
+   * Path to a JSON file used to persist the cache across process restarts.
+   * `null` (the default for direct construction) disables persistence —
+   * tests construct buses without writing to disk. The singleton accessor
+   * `getAgentLinkBus()` injects a real path so production runs persist.
+   */
+  cacheFilePath?: string | null;
+}
+
+interface PersistedCacheV1 {
+  version: 1;
+  entries: CachedAgentLinkMessage[];
 }
 
 export class AgentLinkBus {
@@ -54,11 +77,16 @@ export class AgentLinkBus {
   private readonly cache = new Map<string, CachedAgentLinkMessage>();
   private readonly maxCacheEntries: number;
   private readonly cacheTtlMs: number;
+  private readonly cacheFilePath: string | null;
+  /** Serialised tail of pending disk writes; new flushes chain off this. */
+  private writeChain: Promise<void> = Promise.resolve();
 
   constructor(opts?: AgentLinkBusOptions) {
     this.emitter.setMaxListeners(64);
     this.maxCacheEntries = opts?.maxCacheEntries ?? DEFAULT_MAX_CACHE_ENTRIES;
     this.cacheTtlMs = opts?.cacheTtlMs ?? DEFAULT_CACHE_TTL_MS;
+    this.cacheFilePath = opts?.cacheFilePath ?? null;
+    this.loadFromDisk();
   }
 
   subscribe(agentId: AgentId, listener: InboundListener): () => void {
@@ -102,6 +130,12 @@ export class AgentLinkBus {
   removeAll(): void {
     this.emitter.removeAllListeners();
     this.cache.clear();
+    this.scheduleFlush();
+  }
+
+  /** Await any queued disk writes. Used by tests. */
+  async drainPendingWrites(): Promise<void> {
+    await this.writeChain;
   }
 
   private recordInCache(event: AgentLinkInboundEvent): void {
@@ -117,18 +151,73 @@ export class AgentLinkBus {
       messageId: event.messageId,
       timestampMs: event.timestampMs,
     });
+    this.scheduleFlush();
   }
 
   private evictExpired(): void {
     const now = Date.now();
+    let mutated = false;
     for (const [id, msg] of this.cache) {
       if (now - msg.timestampMs > this.cacheTtlMs) {
         this.cache.delete(id);
+        mutated = true;
       } else {
         // Map iteration is in insertion order; once we hit a non-expired
         // entry the rest are also non-expired.
-        return;
+        break;
       }
+    }
+    if (mutated) this.scheduleFlush();
+  }
+
+  private loadFromDisk(): void {
+    if (!this.cacheFilePath) return;
+    if (!existsSync(this.cacheFilePath)) return;
+    try {
+      const raw = readFileSync(this.cacheFilePath, "utf-8");
+      const data = JSON.parse(raw) as Partial<PersistedCacheV1> | undefined;
+      const entries = Array.isArray(data?.entries) ? data!.entries : [];
+      const now = Date.now();
+      for (const e of entries) {
+        if (
+          e &&
+          typeof e === "object" &&
+          typeof e.messageId === "string" &&
+          typeof e.from === "string" &&
+          typeof e.to === "string" &&
+          typeof e.text === "string" &&
+          typeof e.timestampMs === "number" &&
+          now - e.timestampMs <= this.cacheTtlMs
+        ) {
+          this.cache.set(e.messageId, e);
+        }
+      }
+    } catch {
+      // Corrupted or unreadable: start with an empty cache.
+    }
+  }
+
+  private scheduleFlush(): void {
+    if (!this.cacheFilePath) return;
+    const snapshot = Array.from(this.cache.values());
+    const path = this.cacheFilePath;
+    const writer = () => this.flushSnapshotToDisk(snapshot, path);
+    this.writeChain = this.writeChain.then(writer, writer);
+  }
+
+  private async flushSnapshotToDisk(
+    entries: CachedAgentLinkMessage[],
+    path: string,
+  ): Promise<void> {
+    try {
+      await mkdir(dirname(path), { recursive: true });
+      const tmp = `${path}.tmp`;
+      const payload: PersistedCacheV1 = { version: 1, entries };
+      await writeFile(tmp, JSON.stringify(payload), "utf-8");
+      await rename(tmp, path);
+    } catch {
+      // Disk write failures must not crash the bus; the in-memory cache still
+      // serves the same process. Worst case: a restart loses recent entries.
     }
   }
 }
@@ -141,7 +230,12 @@ interface SingletonHolder {
 
 export function getAgentLinkBus(): AgentLinkBus {
   const g = globalThis as SingletonHolder;
-  if (!g[SINGLETON_KEY]) g[SINGLETON_KEY] = new AgentLinkBus();
+  if (!g[SINGLETON_KEY]) {
+    g[SINGLETON_KEY] = new AgentLinkBus({
+      cacheFilePath:
+        process.env.AGENTLINK_CACHE_FILE ?? DEFAULT_CACHE_FILE_PATH,
+    });
+  }
   return g[SINGLETON_KEY]!;
 }
 
