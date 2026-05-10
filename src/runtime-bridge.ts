@@ -264,9 +264,17 @@ async function loadTranscriptRuntime(): Promise<TranscriptRuntime | null> {
  * turn — instead of relying solely on the `↪ Tu envío anterior` block,
  * which depends on the in-memory bus cache.
  *
- * Falls back silently when the running openclaw build does not expose the
- * public transcript runtime export. Errors do not propagate; the caller
- * should treat this as fire-and-forget.
+ * The `appendAssistantMessageToSessionTranscript` helper is loaded via
+ * dynamic import from `openclaw/plugin-sdk/transcript.runtime`. That
+ * subpath is not yet exposed in published openclaw releases — the upstream
+ * PR is tracked in `docs/openclaw-coupling.md`. Until it merges, this
+ * helper is a no-op (the cache-based `↪` block carries the load). After it
+ * merges and you `brew upgrade openclaw` + restart the gateway, the helper
+ * activates automatically.
+ *
+ * Errors do not propagate; the caller should treat this as fire-and-forget.
+ * See `docs/openclaw-coupling.md` for the full coupling map between this
+ * plugin and openclaw, including drift scenarios.
  */
 export async function persistOutboundToSenderTranscript(params: {
   cfg: unknown;

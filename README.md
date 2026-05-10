@@ -412,6 +412,11 @@ invoked once per agent involved. No code changes needed.
 
 - [SRS-002: Canal de comunicación inter-agente de confianza](./SRS-002-inter-agent-trusted-channel.md) —
   the original requirements specification (Spanish).
+- [docs/openclaw-coupling.md](./docs/openclaw-coupling.md) — the operational
+  map between this plugin and OpenClaw: which `plugin-sdk` symbols we
+  consume, the pending upstream PR for `plugin-sdk/transcript.runtime`,
+  failure modes of the persisted bus cache, and what to do when the
+  upstream API drifts.
 - [OpenClaw Channel Plugin SDK](https://docs.openclaw.kr/plugins/sdk-channel-plugins) —
   upstream documentation for channel plugins.
 
